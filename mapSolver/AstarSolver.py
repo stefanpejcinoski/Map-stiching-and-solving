@@ -31,8 +31,7 @@ def Astar(image, start, finish):
             while node!=startnode:
                 path.append(node.position)
                 node=node.parent
-            return path
-        
+            return path[::-1]        
         
         for ind, neighbor in enumerate([(1, 0), (0, 1), (0, -1), (-1, 0), (1, -1), (-1, 1), (1, 1), (-1, -1)]):
             if ind>3:
