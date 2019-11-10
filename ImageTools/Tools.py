@@ -5,35 +5,121 @@ Created on Sun Aug 25 13:58:44 2019
 
 @author: stefan
 """
-
 import cv2 
-import numpy as np 
+from matplotlib import pyplot as plt
 
+import numpy as np 
+from multiprocessing import Process, Queue, Lock
 def loadImage(path):
     return cv2.imread(path, 1)
 
 def distFunction(point1, point2):
     return np.sqrt((point1[0]-point2[0])**2 + (point1[1]-point2[1])**2)
-
-def maxPoolResize(image, factor):
     
+
+
+    
+def maxPoolResize(image, factor , q=None, no=None, lock=None):
+    
+  
     newrows=image.shape[1]//factor
     newcols=image.shape[0]//factor
-    newim=np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+   
+    newim=np.zeros((newcols, newrows), dtype=np.uint8)
     for x in np.arange(0, image.shape[0]-factor, factor):
         for y in np.arange(0, image.shape[1]-factor, factor):
             whitePixCounter=0
             for x1 in np.arange(0, factor):
                 for y1 in np.arange(0, factor):
                     if image[x+x1][y+y1]>0:
+                       
                         whitePixCounter+=1
             if whitePixCounter==factor**2:
                 newim[x//factor][y//factor]=255
             else:
                 newim[x//factor][y//factor]=0
-	
+ 
+    if q is not None:
+
+        lock.acquire()
+        q.put([no, newim, newrows, newcols])
+        lock.release()
+        
     return newim, newrows, newcols
-                        
+  
+
+def paralelizedMaxPoolResize(image, factor):
+    l=Lock()
+    shape1=image.shape[0]
+    shape2=image.shape[1]
+    nshape1=shape1//2
+    nshape2=shape2//2
+   
+    
+    imageQueue=Queue()
+    newimarray=[]
+    
+    if (shape1%2==0):
+        if (shape2%2==0):
+           
+            p1=Process(target=maxPoolResize, args=(image[0:nshape1, 0:nshape2], factor, imageQueue, 1, l,))
+            p2=Process(target=maxPoolResize, args=(image[0:nshape1, nshape2:shape2], factor, imageQueue, 2, l,))
+            p3=Process(target=maxPoolResize, args=(image[nshape1:shape1, 0:nshape2], factor, imageQueue, 3, l,))
+            p4=Process(target=maxPoolResize, args=(image[nshape1:shape1, nshape2:shape2], factor, imageQueue, 4, l,))
+        else:
+            
+            p1=Process(target=maxPoolResize, args=(image[0:nshape1, 0:nshape2], factor, imageQueue, 1, l,))
+            p2=Process(target=maxPoolResize, args=(image[0:nshape1, nshape2:shape2], factor, imageQueue, 2, l,))
+            p3=Process(target=maxPoolResize, args=(image[nshape1+1:shape1, 0:nshape2], factor, imageQueue, 3, l,))
+            p4=Process(target=maxPoolResize, args=(image[nshape1+1:shape1, nshape2:shape2], factor, imageQueue, 4, l,))
+    elif (shape1%2!=0):
+        if (shape2%2==0):
+           
+            p1=Process(target=maxPoolResize, args=(image[0:nshape1, 0:nshape2], factor, imageQueue, 1, l,))
+            p2=Process(target=maxPoolResize, args=(image[0:nshape1, nshape2:shape2], factor, imageQueue, 2, l,))
+            p3=Process(target=maxPoolResize, args=(image[nshape1+1:shape1, 0:nshape2], factor, imageQueue, 3, l,))
+            p4=Process(target=maxPoolResize, args=(image[nshape1+1:shape1, nshape2:shape2], factor, imageQueue, 4, l,))
+        else:
+           
+            p1=Process(target=maxPoolResize, args=(image[0:nshape1, 0:nshape2], factor, imageQueue, 1, l,))
+            p2=Process(target=maxPoolResize, args=(image[0:nshape1, nshape2+1:shape2], factor, imageQueue, 2, l,))
+            p3=Process(target=maxPoolResize, args=(image[nshape1+1:shape1, 0:nshape2], factor, imageQueue, 3, l,))
+            p4=Process(target=maxPoolResize, args=(image[nshape1+1:shape1, nshape2+1:shape2], factor, imageQueue, 4, l,))
+            
+    
+    p1.start()
+    p2.start()
+    p3.start()
+    p4.start()
+    
+    while imageQueue.qsize()<4:
+        pass
+
+
+    while True:
+        if imageQueue.qsize()==0:
+            break
+        newimarray.append(imageQueue.get())
+    
+    arrofindexes=[row[0] for row in newimarray]
+    index1=arrofindexes.index(1)
+    index2=arrofindexes.index(2)
+    index3=arrofindexes.index(3)
+    index4=arrofindexes.index(4)
+       
+# GRESKA VO OSKITE, REDOSLEDNO SE 1,3,2,4 MESTO 1,2,3,4 - PROVERI ZA NA KRAJ
+   
+    half1=np.concatenate((newimarray[index1][1], newimarray[index3][1]), axis=0)
+    half2=np.concatenate((newimarray[index2][1], newimarray[index4][1]), axis=0)
+   
+   
+    full=np.concatenate((half1, half2), axis=1)
+  
+    return full, shape1//factor, shape2//factor
+            
+    
+    
+                          
 def scaleCoordinates(coordinates, factor):
 	return (coordinates[0]//factor, coordinates[1]//factor)                 
 
